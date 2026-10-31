@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="ms">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0b1020">
+  <title>3D & AR Model Viewer</title>
+  <script type="module" src="https://unpkg.com/@google/model-viewer/dist/model-viewer.min.js"></script>
+  <style>
+    :root {
+      --bg: #090e1c;
+      --panel: rgba(19, 27, 49, .88);
+      --panel-2: #151f39;
+      --line: rgba(148, 163, 184, .18);
+      --text: #f8fafc;
+      --muted: #a9b5cc;
+      --blue: #60a5fa;
+      --violet: #a78bfa;
+      --cyan: #67e8f9;
+      --green: #34d399;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; min-height: 100vh; color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+      background:
+        radial-gradient(ellipse at 15% 10%, rgba(99,102,241,.22), transparent 35%),
+        radial-gradient(ellipse at 85% 80%, rgba(14,165,233,.15), transparent 38%),
+        var(--bg);
+    }
+    .shell { width: min(1180px, calc(100% - 32px)); margin: 0 auto; padding: 28px 0 36px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 24px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand-mark {
+      width: 44px; height: 44px; display: grid; place-items: center; border-radius: 14px;
+      background: linear-gradient(135deg, #6366f1, #06b6d4); font-size: 22px;
+      box-shadow: 0 8px 28px rgba(59,130,246,.25);
+    }
+    h1 { margin: 0; font-size: clamp(20px, 3vw, 28px); letter-spacing: -.6px; }
+    .subtitle { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+    .status {
+      display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px;
+      border: 1px solid var(--line); border-radius: 999px; color: #cbd5e1;
+      background: rgba(15,23,42,.6); font-size: 12px; white-space: nowrap;
+    }
+    .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); box-shadow: 0 0 12px var(--green); }
+    .layout { display: grid; grid-template-columns: minmax(0, 1fr) 290px; gap: 18px; align-items: stretch; }
+    .viewer-card, .side-card {
+      border: 1px solid var(--line); border-radius: 22px; overflow: hidden;
+      background: var(--panel); box-shadow: 0 22px 70px rgba(0,0,0,.25);
+      backdrop-filter: blur(14px);
+    }
+    .viewer-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 17px 19px; border-bottom: 1px solid var(--line); }
+    .viewer-top strong { font-size: 14px; }
+    .viewer-top span { color: var(--muted); font-size: 12px; }
+    .stage { position: relative; min-height: 520px; background:
+      radial-gradient(ellipse at center, rgba(99,102,241,.13), transparent 55%),
+      linear-gradient(145deg, rgba(30,41,75,.65), rgba(9,14,28,.92)); }
+    model-viewer { width: 100%; height: 520px; display: block; background: transparent; --poster-color: transparent; }
+    .loading {
+      position: absolute; z-index: 3; left: 50%; top: 50%; transform: translate(-50%,-50%);
+      width: min(300px, 80%); padding: 18px; border: 1px solid var(--line); border-radius: 16px;
+      text-align: center; background: rgba(9,14,28,.88); transition: opacity .25s;
+    }
+    .loading.hidden { opacity: 0; pointer-events: none; }
+    .spinner { width: 28px; height: 28px; margin: 0 auto 10px; border: 3px solid #334155; border-top-color: var(--cyan); border-radius: 50%; animation: spin .8s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .progress-track { height: 5px; margin-top: 12px; border-radius: 10px; background: #26334e; overflow: hidden; }
+    .progress-bar { height: 100%; width: 0; background: linear-gradient(90deg, var(--blue), var(--cyan)); transition: width .15s; }
+    .error { display: none; color: #fda4af; font-size: 12px; line-height: 1.5; margin-top: 9px; }
+    .controls { display: flex; flex-wrap: wrap; gap: 9px; padding: 15px 18px 18px; border-top: 1px solid var(--line); }
+    button {
+      border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px;
+      color: var(--text); background: #1b2744; font: inherit; font-size: 13px;
+      cursor: pointer; transition: transform .18s, background .18s, border-color .18s;
+    }
+    button:hover { transform: translateY(-1px); background: #263657; border-color: rgba(103,232,249,.45); }
+    button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+    .primary { border: 0; background: linear-gradient(110deg, #4f46e5, #0891b2); font-weight: 700; }
+    .primary:hover { background: linear-gradient(110deg, #6366f1, #06b6d4); }
+    .side-card { padding: 20px; }
+    .side-card h2 { margin: 0 0 7px; font-size: 16px; }
+    .side-card > p { margin: 0 0 19px; color: var(--muted); font-size: 12px; line-height: 1.6; }
+    .feature { display: flex; gap: 11px; padding: 13px 0; border-top: 1px solid var(--line); }
+    .feature-icon { flex: 0 0 34px; height: 34px; display: grid; place-items: center; border-radius: 10px; background: rgba(99,102,241,.16); }
+    .feature b { display: block; font-size: 13px; margin: 1px 0 4px; }
+    .feature small { display: block; color: var(--muted); font-size: 11px; line-height: 1.5; }
+    .tip { margin-top: 17px; padding: 13px; border-radius: 13px; background: rgba(34,211,238,.08); border: 1px solid rgba(34,211,238,.18); color: #c5f6ff; font-size: 11px; line-height: 1.6; }
+    footer { text-align: center; color: #71809c; font-size: 11px; margin-top: 18px; }
+    @media (max-width: 850px) {
+      .layout { grid-template-columns: 1fr; }
+      .side-card { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 0 18px; }
+      .side-card h2, .side-card > p, .tip { grid-column: 1 / -1; }
+    }
+    @media (max-width: 560px) {
+      .shell { width: min(100% - 20px, 1180px); padding-top: 17px; }
+      header { align-items: flex-start; }
+      .status { display: none; }
+      .stage { min-height: 390px; }
+      model-viewer { height: 390px; }
+      .viewer-top { padding: 14px; }
+      .side-card { display: block; }
+      .controls button { flex: 1 1 calc(50% - 9px); }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">◈</div>
+        <div>
+          <h1>3D &amp; AR Model Viewer</h1>
+          <p class="subtitle">Teroka model 3D anda dalam ruang maya dan dunia sebenar.</p>
+        </div>
+      </div>
+      <div class="status"><span class="dot"></span> Pemapar 3D sedia digunakan</div>
+    </header>
+
+    <section class="layout">
+      <div class="viewer-card">
+        <div class="viewer-top">
+          <strong>Pratonton Model 3D</strong>
+          <span>Seret · Zum · Putar</span>
+        </div>
+        <div class="stage">
+          <model-viewer
+            id="modelViewer"
+            src="https://arleta.site/interactivelink/7054/mod3l_under25mb.glb"
+            alt="Model 3D interaktif"
+            ar
+            ar-modes="webxr scene-viewer quick-look"
+            ar-scale="auto"
+            camera-controls
+            touch-action="pan-y"
+            auto-rotate
+            rotation-per-second="22deg"
+            shadow-intensity="1"
+            exposure="1"
+            environment-image="neutral"
+            loading="eager"
+            reveal="auto">
+            <button slot="ar-button" class="primary" id="arSlotButton">⌖ Lihat dalam AR</button>
+          </model-viewer>
+
+          <div class="loading" id="loadingPanel">
+            <div class="spinner"></div>
+            <div id="loadingText">Memuatkan model 3D...</div>
+            <div class="progress-track"><div class="progress-bar" id="progressBar"></div></div>
+            <div class="error" id="errorMessage">Model tidak dapat dimuatkan. Semak pautan model atau sambungan internet.</div>
+          </div>
+        </div>
+        <div class="controls">
+          <button class="primary" id="arButton" type="button">⌖ Lihat dalam AR</button>
+          <button id="rotateButton" type="button">Ⅱ Henti putaran</button>
+          <button id="resetButton" type="button">⟳ Tetapkan semula</button>
+          <button id="fullscreenButton" type="button">⛶ Skrin penuh</button>
+        </div>
+      </div>
+
+      <aside class="side-card">
+        <h2>Cara menggunakan</h2>
+        <p>Gunakan kawalan mudah untuk melihat model dari pelbagai sudut atau letakkannya dalam persekitaran sebenar.</p>
+
+        <div class="feature">
+          <div class="feature-icon">🖱️</div>
+          <div><b>Lihat model 3D</b><small>Seret model dengan tetikus atau jari untuk memutarkannya.</small></div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">🔍</div>
+          <div><b>Zum masuk / keluar</b><small>Gunakan roda tetikus atau cubit skrin dengan dua jari.</small></div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">📱</div>
+          <div><b>Mod Augmented Reality</b><small>Tekan “Lihat dalam AR” pada telefon yang menyokong AR.</small></div>
+        </div>
+        <div class="feature">
+          <div class="feature-icon">⟳</div>
+          <div><b>Putaran automatik</b><small>Hidupkan atau hentikan putaran untuk memeriksa model.</small></div>
+        </div>
+
+        <div class="tip">
+          <strong>Tip AR:</strong> Buka halaman ini melalui HTTPS menggunakan telefon. Android memerlukan peranti serasi ARCore; iPhone/iPad menggunakan Quick Look. Ketersediaan AR bergantung pada peranti dan pelayar.
+        </div>
+      </aside>
+    </section>
+    <footer>Powered by Google model-viewer · Fail model: GLB</footer>
+  </main>
+
+  <script>
+    const viewer = document.getElementById('modelViewer');
+    const loadingPanel = document.getElementById('loadingPanel');
+    const loadingText = document.getElementById('loadingText');
+    const progressBar = document.getElementById('progressBar');
+    const errorMessage = document.getElementById('errorMessage');
+    const rotateButton = document.getElementById('rotateButton');
+
+    viewer.addEventListener('progress', (event) => {
+      const total = event.detail.totalProgress || 0;
+      progressBar.style.width = `${Math.round(total * 100)}%`;
+      loadingText.textContent = total >= 1 ? 'Model hampir siap...' : `Memuatkan model 3D... ${Math.round(total * 100)}%`;
+    });
+
+    viewer.addEventListener('load', () => {
+      loadingText.textContent = 'Model berjaya dimuatkan';
+      progressBar.style.width = '100%';
+      window.setTimeout(() => loadingPanel.classList.add('hidden'), 450);
+    });
+
+    viewer.addEventListener('error', () => {
+      loadingText.textContent = 'Tidak berjaya memuatkan model';
+      errorMessage.style.display = 'block';
+      progressBar.style.background = '#fb7185';
+    });
+
+    document.getElementById('arButton').addEventListener('click', () => {
+      if (viewer.canActivateAR) {
+        viewer.activateAR();
+      } else {
+        alert('Mod AR tidak tersedia pada peranti atau pelayar ini. Anda masih boleh melihat dan memutar model dalam mod 3D.');
+      }
+    });
+
+    document.getElementById('arSlotButton').addEventListener('click', (event) => {
+      event.stopPropagation();
+      // The model-viewer AR slot button is activated by the component itself.
+    });
+
+    rotateButton.addEventListener('click', () => {
+      viewer.autoRotate = !viewer.autoRotate;
+      rotateButton.textContent = viewer.autoRotate ? 'Ⅱ Henti putaran' : '▶ Putar automatik';
+    });
+
+    document.getElementById('resetButton').addEventListener('click', () => {
+      viewer.cameraOrbit = 'auto auto auto';
+      viewer.cameraTarget = 'auto auto auto';
+      viewer.fieldOfView = 'auto';
+      viewer.autoRotate = true;
+      rotateButton.textContent = 'Ⅱ Henti putaran';
+    });
+
+    document.getElementById('fullscreenButton').addEventListener('click', async () => {
+      const target = document.querySelector('.viewer-card');
+      try {
+        if (!document.fullscreenElement) await target.requestFullscreen();
+        else await document.exitFullscreen();
+      } catch (error) {
+        alert('Skrin penuh tidak disokong oleh pelayar ini.');
+      }
+    });
+  </script>
+</body>
+</html>
